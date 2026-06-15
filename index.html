@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>AI ドローンゲーム</title>
+
+<style>
+/* 画面全体のスクロールや余白を完全になくす */
+html, body {
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+    background: black;
+    font-family: sans-serif;
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    user-select: none;
+}
+
+/* ゲーム全体を包む枠：スマホの画面幅に合わせて自動縮小する */
+#gameWrap {
+    position: relative;
+    width: 100%;
+    max-width: 800px; /* PCでの最大サイズ */
+    aspect-ratio: 800 / 600; /* 横横比を 4:3 に固定 */
+    margin: auto;
+    top: 50%;
+    transform: translateY(-50%); /* 画面の上下中央に配置 */
+}
+
+/* ゲーム画面（Canvas）を枠線いっぱいに広げる */
+canvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+    background: #111;
+}
+
+/* オープニング動画も枠線いっぱいに広げる */
+#introVideo {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    background: black;
+    z-index: 2;
+}
+
+/* --- スマホ用ボタンのスタイル（画面サイズ基準の「%」に変更してはみ出しを防止） --- */
+.touch-btn {
+    position: absolute;
+    background: rgba(255, 255, 255, 0.25);
+    color: white;
+    border: 2px solid rgba(255, 255, 255, 0.5);
+    border-radius: 50%;
+    text-align: center;
+    font-weight: bold;
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: manipulation;
+    z-index: 10;
+    
+    /* ボタンの大きさを画面の横幅に対して一定の比率にする */
+    width: 10%;
+    aspect-ratio: 1 / 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 4vw; /* 文字の大きさも画面幅に比例 */
+}
+
+@media (min-width: 800px) {
+    /* PCなど画面が大きい時はボタンが大きくなりすぎないように制限 */
+    .touch-btn {
+        width: 60px;
+        font-size: 20px;
+    }
+}
+
+.touch-btn:active {
+    background: rgba(255, 255, 255, 0.6);
+    color: black;
+}
+
+/* STARTボタン */
+#startBtn {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    width: 160px;
+    height: 60px;
+    border-radius: 30px;
+    font-size: 20px;
+    background: rgba(230, 0, 40, 0.85);
+    border: 2px solid #fff;
+    z-index: 3;
+    box-shadow: 0 0 15px rgba(230, 0, 40, 0.6);
+    cursor: pointer;
+    aspect-ratio: auto;
+}
+
+/* 十字キーの位置を％指定に変更（画面の左下隅を基準に配置） */
+#btnUp    { left: 12%; bottom: 22%; }
+#btnDown  { left: 12%; bottom: 2%; }
+#btnLeft  { left: 2%;  bottom: 12%; }
+#btnRight { left: 22%; bottom: 12%; }
+
+/* Hボタンの位置（画面の右下隅を基準に配置） */
+#btnH { 
+    right: 5%; 
+    bottom: 8%; 
+    width: 14%; /* 少し押しやすく大きめに */
+    font-size: 5vw;
+    background: rgba(40, 167, 69, 0.4); 
+    border-color: rgba(40, 167, 69, 0.7); 
+    cursor: pointer;
+}
+@media (min-width: 800px) {
+    #btnH { width: 80px; font-size: 24px; }
+}
+#btnH:active { 
+    background: rgba(40, 167, 69, 0.8); 
+}
+</style>
+</head>
+
+<body>
+
+<div id="gameWrap">
+    <canvas id="game" width="800" height="600"></canvas>
+    
+    <video id="introVideo" src="SB.mp4" autoplay muted loop playsinline></video>
+    <button id="startBtn" class="touch-btn">START</button>
+
+    <div id="btnUp" class="touch-btn">▲</div>
+    <div id="btnDown" class="touch-btn">▼</div>
+    <div id="btnLeft" class="touch-btn">◀</div>
+    <div id="btnRight" class="touch-btn">▶</div>
+    <div id="btnH" class="touch-btn">H</div>
+</div>
+
+<script src="script1.js"></script>
+
+<script>
+(function() {
+    const startBtn = document.getElementById('startBtn');
+    const introVideo = document.getElementById('introVideo');
+
+    let isStarted = false;
+
+    // ゲーム開始の共通処理
+    function handleStartGame() {
+        if (isStarted) return;
+        isStarted = true;
+
+        if (introVideo) {
+            introVideo.pause();
+            introVideo.remove();
+        }
+        startBtn.style.display = 'none';
+
+        const eventOptions = {
+            bubbles: true, cancelable: true, view: window,
+            key: 's', code: 'KeyS', keyCode: 83, which: 83
+        };
+
+        const keydownEvent = new KeyboardEvent('keydown', eventOptions);
+        Object.defineProperty(keydownEvent, 'keyCode', { value: 83 });
+        Object.defineProperty(keydownEvent, 'which', { value: 83 });
+        Object.defineProperty(keydownEvent, 'key', { value: 's' });
+        Object.defineProperty(keydownEvent, 'code', { value: 'KeyS' });
+
+        const keydownEventUpper = new KeyboardEvent('keydown', { ...eventOptions, key: 'S' });
+
+        window.dispatchEvent(keydownEvent);
+        window.dispatchEvent(keydownEventUpper);
+        document.dispatchEvent(keydownEvent);
+        
+        const canvas = document.getElementById('game');
+        if(canvas) canvas.dispatchEvent(keydownEvent);
+    }
+
+    startBtn.addEventListener('touchstart', function(e) {
+        e.preventDefault();
+        handleStartGame();
+    }, { passive: false });
+
+    startBtn.addEventListener('click', function(e) {
+        e.preventDefault();
+        handleStartGame();
+    });
+
+    // --- 操作キーの変換設定 ---
+    const buttonMapping = {
+        'btnUp':    { key: 'ArrowUp',    code: 'ArrowUp',    keyCode: 38 },
+        'btnDown':  { key: 'ArrowDown',  code: 'ArrowDown',  keyCode: 40 },
+        'btnLeft':  { key: 'ArrowLeft',  code: 'ArrowLeft',  keyCode: 37 },
+        'btnRight': { key: 'ArrowRight', code: 'ArrowRight', keyCode: 39 },
+        'btnH':     { key: 'h',          code: 'KeyH',       keyCode: 72 }
+    };
+
+    function sendKeyEvent(type, keyData) {
+        const ev = new KeyboardEvent(type, {
+            key: keyData.key,
+            code: keyData.code,
+            keyCode: keyData.keyCode,
+            which: keyData.keyCode,
+            bubbles: true,
+            cancelable: true
+        });
+        Object.defineProperty(ev, 'keyCode', { value: keyData.keyCode });
+        Object.defineProperty(ev, 'which', { value: keyData.keyCode });
+        Object.defineProperty(ev, 'key', { value: keyData.key });
+        Object.defineProperty(ev, 'code', { value: keyData.code });
+
+        window.dispatchEvent(ev);
+        document.dispatchEvent(ev);
+    }
+
+    Object.keys(buttonMapping).forEach(function(btnId) {
+        const btnElement = document.getElementById(btnId);
+        const keyData = buttonMapping[btnId];
+        if (!btnElement) return;
+
+        btnElement.addEventListener('touchstart', function(e) {
+            e.preventDefault();
+            sendKeyEvent('keydown', keyData);
+        }, { passive: false });
+
+        btnElement.addEventListener('touchend', function(e) {
+            e.preventDefault();
+            sendKeyEvent('keyup', keyData);
+        }, { passive: false });
+
+        btnElement.addEventListener('mousedown', function(e) {
+            e.preventDefault();
+            sendKeyEvent('keydown', keyData);
+        });
+
+        btnElement.addEventListener('mouseup', function(e) {
+            e.preventDefault();
+            sendKeyEvent('keyup', keyData);
+        });
+
+        btnElement.addEventListener('mouseleave', function(e) {
+            sendKeyEvent('keyup', keyData);
+        });
+    });
+})();
+</script>
+
+</body>
+</html>
